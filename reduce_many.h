@@ -12,7 +12,8 @@ void call_template_reduce_many_kernels(int dimGrid, int dimBlock, double *d_idat
 
 void write_at_begining(double *g_odata, int nElementsInVector, int nVectors, int idxFirstArrayToRewrite);
 
-int getNumberOfBlockDim(int nElementsToSum, int optNumOperation);
+int getNumberOfBlockDim(int nElementsToSum, int optNumOperationPerThread, uint noThreadsPerBlock);
+int getMaxThreadsPerBlock();
 int local_reductions_many(int n, int m, double *d_in, double *d_out);
 
 #endif

@@ -112,19 +112,24 @@ __global__ void write_at_begining(double *g_odata, int nVectors, int nElementsIn
     }
 }
 
-int getNumberOfBlockDim(int nElementsToSum, int optNumOperationPerThread) {
+int getNumberOfBlockDim(int nElementsToSum, int optNumOperationPerThread, uint noThreadsPerBlock) {
     int nThreads = (int)ceil((float)nElementsToSum/optNumOperationPerThread);
     
-    if(nThreads <= 32) 
-        return 32;
-    else if(nThreads <= 64)
-        return 64;
-    else if(nThreads <= 128) 
-        return 128;
-    else if(nThreads <= 256) 
-        return 256;
-    else 
-        return 512;
+    while (noThreadsPerBlock > 32) {
+        if(nThreads >= noThreadsPerBlock) {
+            return noThreadsPerBlock;
+        }
+        noThreadsPerBlock >>= 1;
+    }
+    return 32;
+}
+
+int getMaxThreadsPerBlock() {
+    int noOfDevice; 
+    cudaGetDevice( &noOfDevice ); 
+    cudaDeviceProp devProp; 
+    cudaGetDeviceProperties(&devProp, noOfDevice);
+    return devProp.maxThreadsPerBlock;
 }
 
 /**
@@ -146,6 +151,7 @@ int local_reductions_many(int n, int m, double *d_in, double *d_out) {
     const int optNumOperationPerThread = 2;
     const int nElementsInVector = m;
     const int nVectors = n;
+    const int maxThreadsPerBlock = getMaxThreadsPerBlock();
 
     cudaError_t error = cudaPeekAtLastError();
     if(error != cudaSuccess) 
@@ -153,7 +159,7 @@ int local_reductions_many(int n, int m, double *d_in, double *d_out) {
 
     // Do first reduction
     int nElementsToSum = m;
-    int dimBlock= getNumberOfBlockDim(nElementsToSum, optNumOperationPerThread);
+    int dimBlock= getNumberOfBlockDim(nElementsToSum, optNumOperationPerThread, maxThreadsPerBlock);
     int nMemoryBlocksPerArray = (int)ceil((float)nElementsToSum/(dimBlock));
     int nBlocksPerArray = (int)ceil((float)nMemoryBlocksPerArray/optNumOperationPerThread);
     int nBlocksTotal = nBlocksPerArray * nVectors;
@@ -172,7 +178,7 @@ int local_reductions_many(int n, int m, double *d_in, double *d_out) {
         nElementsToSum = nBlocksPerArray;
         distBetweenSums *= dimBlock; 
         endVal = nElementsToSum*distBetweenSums;               
-        dimBlock = getNumberOfBlockDim(nElementsToSum, optNumOperationPerThread);
+        dimBlock = getNumberOfBlockDim(nElementsToSum, optNumOperationPerThread, maxThreadsPerBlock);
         nMemoryBlocksPerArray = (int)ceil((float)nElementsToSum/(dimBlock));
         nBlocksPerArray = (int)ceil((float)nMemoryBlocksPerArray/optNumOperationPerThread);
         nBlocksTotal = nBlocksPerArray * nVectors;        
@@ -184,12 +190,13 @@ int local_reductions_many(int n, int m, double *d_in, double *d_out) {
     }
     
     // Write at the begining of output
-    int maxThreadsPerBlock = 512;
     for(int idxFirstArrayToRewrite=0; idxFirstArrayToRewrite<nVectors; idxFirstArrayToRewrite+=maxThreadsPerBlock) {
         int smemSize=maxThreadsPerBlock*sizeof(double);
         write_at_begining<<< 1, maxThreadsPerBlock, smemSize>>>(d_out, nVectors, nElementsInVector, idxFirstArrayToRewrite);
     }
-    
 
     return 0;
 }
+
+//TODO
+// wrong results when dimBlock=1024
