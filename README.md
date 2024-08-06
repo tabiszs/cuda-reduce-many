@@ -1,2 +1,4 @@
 # cuda-reduce-many
-Parallel reduction for W-SLDA project
+Optimalization including parallel reduction for W-SLDA Toolkit.
+
+For more information see: https://gitlab.fizyka.pw.edu.pl/wtools/wslda/-/snippets/46
